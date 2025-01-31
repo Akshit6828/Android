@@ -22,28 +22,31 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.widget.Toast
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleObserver
-import androidx.lifecycle.OnLifecycleEvent
-import com.duckduckgo.app.browser.BuildConfig
+import androidx.lifecycle.LifecycleOwner
+import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.app.trackerdetection.api.TrackerDataDownloader
-import com.duckduckgo.di.scopes.AppObjectGraph
+import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.utils.extensions.registerNotExportedReceiver
+import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.schedulers.Schedulers
-import timber.log.Timber
 import javax.inject.Inject
+import timber.log.Timber
 
 class TrackerDataDevReceiver(
     context: Context,
     intentAction: String = DOWNLOAD_TDS_INTENT_ACTION,
-    private val receiver: (Intent) -> Unit
-) : BroadcastReceiver(), LifecycleObserver {
+    private val receiver: (Intent) -> Unit,
+) : BroadcastReceiver() {
     init {
-        context.registerReceiver(this, IntentFilter(intentAction))
+        context.registerNotExportedReceiver(this, IntentFilter(intentAction))
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         receiver(intent)
     }
 
@@ -52,16 +55,19 @@ class TrackerDataDevReceiver(
     }
 }
 
-@ContributesMultibinding(AppObjectGraph::class)
+@ContributesMultibinding(
+    scope = AppScope::class,
+    boundType = MainProcessLifecycleObserver::class,
+)
 class TrackerDataDevReceiverRegister @Inject constructor(
     private val context: Context,
-    private val trackderDataDownloader: TrackerDataDownloader
-) : LifecycleObserver {
+    private val trackderDataDownloader: TrackerDataDownloader,
+    private val appBuildConfig: AppBuildConfig,
+) : MainProcessLifecycleObserver {
 
     @SuppressLint("CheckResult")
-    @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
-    fun register() {
-        if (!BuildConfig.DEBUG) {
+    override fun onCreate(owner: LifecycleOwner) {
+        if (!appBuildConfig.isDebug) {
             Timber.i("Will not register TrackerDataDevReceiverRegister, not in DEBUG mode")
             return
         }

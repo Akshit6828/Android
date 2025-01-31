@@ -17,9 +17,10 @@
 package com.duckduckgo.app.referral
 
 import com.duckduckgo.app.statistics.AtbInitializerListener
-import timber.log.Timber
+import com.duckduckgo.di.scopes.AppScope
+import dagger.SingleInstanceIn
 import javax.inject.Inject
-import javax.inject.Singleton
+import timber.log.Timber
 
 interface AppInstallationReferrerStateListener {
 
@@ -29,10 +30,9 @@ interface AppInstallationReferrerStateListener {
     companion object {
         const val MAX_REFERRER_WAIT_TIME_MS = 1_500L
     }
-
 }
 
-@Singleton
+@SingleInstanceIn(AppScope::class)
 class EmptyReferrerStateListener @Inject constructor() : AppInstallationReferrerStateListener, AtbInitializerListener {
 
     private var referralResult: ParsedReferrerResult = ParsedReferrerResult.ReferrerInitialising

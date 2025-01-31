@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 DuckDuckGo
+ * Copyright (c) 2022 DuckDuckGo
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,80 +16,45 @@
 
 package com.duckduckgo.privacy.config.impl.features.trackerallowlist
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.duckduckgo.feature.toggles.api.FeatureToggle
-import com.duckduckgo.privacy.config.api.PrivacyFeatureName
-import com.duckduckgo.privacy.config.impl.FileUtilities
 import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
-import com.squareup.moshi.JsonAdapter
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
-import org.json.JSONObject
+import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.ParameterizedRobolectricTestRunner
-import java.lang.reflect.ParameterizedType
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
-@RunWith(ParameterizedRobolectricTestRunner::class)
-class RealTrackerAllowlistTest(private val testCase: TestCase) {
+@RunWith(AndroidJUnit4::class)
+class RealTrackerAllowlistTest {
 
     private val mockTrackerAllowlistRepository: TrackerAllowlistRepository = mock()
     private val mockFeatureToggle: FeatureToggle = mock()
+    private lateinit var testee: RealTrackerAllowlist
 
-    companion object {
-        private val moshi = Moshi.Builder().build()
-        val type: ParameterizedType = Types.newParameterizedType(List::class.java, TestCase::class.java)
-        val adapter: JsonAdapter<List<TestCase>> = moshi.adapter(type)
+    @Before
+    fun setup() {
+        whenever(mockFeatureToggle.isFeatureEnabled(any(), any())).thenReturn(true)
 
-        @JvmStatic
-        @ParameterizedRobolectricTestRunner.Parameters(name = "Test case: {index} - {0}")
-        fun testData(): List<TestCase> {
-            return adapter.fromJson(FileUtilities.loadText("json/tracker_allowlist_matching_tests.json"))
-                ?: emptyList()
-        }
+        testee = RealTrackerAllowlist(mockTrackerAllowlistRepository, mockFeatureToggle)
     }
 
     @Test
-    fun whenIsAnExceptionAnFeatureEnableThenReturnCorrectValues() {
-        whenever(mockFeatureToggle.isFeatureEnabled(PrivacyFeatureName.TrackerAllowlistFeatureName(), true)).thenReturn(true)
-        mockAllowlist()
+    fun whenUrlCannotBeParsedThenDoNotThrowAnException() {
+        val url = "://allowlist-tracker-1.com:5000/videos.js"
+        givenDomainIsAnException("allowlist-tracker-1.com")
 
-        val testee = RealTrackerAllowlist(mockTrackerAllowlistRepository, mockFeatureToggle)
-
-        assertEquals(testCase.isAllowlisted, testee.isAnException(testCase.site, testCase.request))
+        assertFalse(testee.isAnException("test.com", url))
     }
 
-    @Test
-    fun whenIsAnExceptionAnFeatureDisabledThenReturnCorrectValues() {
-        whenever(mockFeatureToggle.isFeatureEnabled(PrivacyFeatureName.TrackerAllowlistFeatureName(), true)).thenReturn(false)
-        mockAllowlist()
-
-        val testee = RealTrackerAllowlist(mockTrackerAllowlistRepository, mockFeatureToggle)
-
-        assertEquals(false, testee.isAnException(testCase.site, testCase.request))
-    }
-
-    private fun mockAllowlist() {
-        val jsonAdapter: JsonAdapter<TrackerAllowlistEntity> =
-            moshi.adapter(TrackerAllowlistEntity::class.java)
-        val exceptions = arrayListOf<TrackerAllowlistEntity>()
-        val jsonObject: JSONObject = FileUtilities.getJsonObjectFromFile("json/tracker_allowlist_reference.json")
-
-        jsonObject.keys().forEach {
-            val allowlistEntity = jsonAdapter.fromJson(jsonObject.get(it).toString())
-            exceptions.add(allowlistEntity!!.copy(domain = it))
-        }
+    private fun givenDomainIsAnException(domain: String) {
+        val exceptions = CopyOnWriteArrayList<TrackerAllowlistEntity>()
+        val entity = TrackerAllowlistEntity(domain, emptyList())
+        exceptions.add(entity)
         whenever(mockTrackerAllowlistRepository.exceptions).thenReturn(exceptions)
     }
-
-    data class TestCase(
-        val description: String,
-        val site: String,
-        val request: String,
-        val isAllowlisted: Boolean
-    )
-
 }

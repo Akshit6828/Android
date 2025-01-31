@@ -18,30 +18,33 @@ package com.duckduckgo.app.surrogates
 
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleObserver
-import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.LifecycleOwner
 import com.duckduckgo.app.di.AppCoroutineScope
+import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.app.surrogates.store.ResourceSurrogateDataStore
-import com.duckduckgo.di.scopes.AppObjectGraph
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
+import java.io.ByteArrayInputStream
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.io.ByteArrayInputStream
-import javax.inject.Inject
 
 @WorkerThread
-@ContributesMultibinding(AppObjectGraph::class)
+@ContributesMultibinding(
+    scope = AppScope::class,
+    boundType = MainProcessLifecycleObserver::class,
+)
 class ResourceSurrogateLoader @Inject constructor(
     @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
     private val resourceSurrogates: ResourceSurrogates,
-    private val surrogatesDataStore: ResourceSurrogateDataStore
-) : LifecycleObserver {
+    private val surrogatesDataStore: ResourceSurrogateDataStore,
+    private val dispatcherProvider: DispatcherProvider,
+) : MainProcessLifecycleObserver {
 
-    @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
-    fun onApplicationCreated() {
-        appCoroutineScope.launch { loadData() }
+    override fun onCreate(owner: LifecycleOwner) {
+        appCoroutineScope.launch(dispatcherProvider.io()) { loadData() }
     }
 
     fun loadData() {
@@ -74,13 +77,11 @@ class ResourceSurrogateLoader @Inject constructor(
         val functionBuilder = StringBuilder()
 
         existingLines.forEach {
-
             if (it.startsWith("#")) {
                 return@forEach
             }
 
             if (nextLineIsNewRule) {
-
                 with(it.split(" ")) {
                     ruleName = this[0]
                     mimeType = this[1]
@@ -99,8 +100,8 @@ class ResourceSurrogateLoader @Inject constructor(
                         scriptId = scriptId,
                         name = ruleName,
                         mimeType = mimeType,
-                        jsFunction = functionBuilder.toString()
-                    )
+                        jsFunction = functionBuilder.toString(),
+                    ),
                 )
 
                 functionBuilder.setLength(0)

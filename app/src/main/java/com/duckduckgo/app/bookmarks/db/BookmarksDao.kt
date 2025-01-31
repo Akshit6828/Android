@@ -44,6 +44,9 @@ interface BookmarksDao {
     @Query("select count(*) from bookmarks WHERE url LIKE :url")
     fun bookmarksCountByUrl(url: String): Int
 
+    @Query("select count(*) from bookmarks")
+    fun bookmarksCount(): Long
+
     @Delete
     fun delete(bookmark: BookmarkEntity)
 
@@ -61,4 +64,7 @@ interface BookmarksDao {
 
     @Query("select * from bookmarks where url = :url limit 1")
     fun getBookmarkByUrl(url: String): BookmarkEntity?
+
+    @Query("delete from bookmarks")
+    fun deleteAll()
 }

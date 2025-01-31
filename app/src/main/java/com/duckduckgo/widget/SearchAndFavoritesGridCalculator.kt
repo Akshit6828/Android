@@ -17,15 +17,18 @@
 package com.duckduckgo.widget
 
 import android.content.Context
-import com.duckduckgo.app.browser.R
-import com.duckduckgo.mobile.android.ui.view.toDp
+import com.duckduckgo.common.ui.view.toDp
+import com.duckduckgo.mobile.android.R as CommonR
 import timber.log.Timber
 
 class SearchAndFavoritesGridCalculator {
-    fun calculateColumns(context: Context, width: Int): Int {
-        val margins = context.resources.getDimension(R.dimen.searchWidgetFavoritesSideMargin).toDp()
-        val item = context.resources.getDimension(R.dimen.searchWidgetFavoriteItemContainerWidth).toDp()
-        val divider = context.resources.getDimension(R.dimen.searchWidgetFavoritesHorizontalSpacing).toDp()
+    fun calculateColumns(
+        context: Context,
+        width: Int,
+    ): Int {
+        val margins = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesSideMargin).toDp()
+        val item = context.resources.getDimension(CommonR.dimen.searchWidgetFavoriteItemContainerWidth).toDp()
+        val divider = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesHorizontalSpacing).toDp()
         var n = 2
         var totalSize = (n * item) + ((n - 1) * divider) + (margins * 2)
 
@@ -39,12 +42,15 @@ class SearchAndFavoritesGridCalculator {
         return WIDGET_COLUMNS_MIN.coerceAtLeast(n - 1)
     }
 
-    fun calculateRows(context: Context, height: Int): Int {
-        val searchBar = context.resources.getDimension(R.dimen.searchWidgetSearchBarHeight).toDp()
-        val margins = context.resources.getDimension(R.dimen.searchWidgetFavoritesTopMargin).toDp() +
-            (context.resources.getDimension(R.dimen.searchWidgetPadding).toDp() * 2)
-        val item = context.resources.getDimension(R.dimen.searchWidgetFavoriteItemContainerHeight).toDp()
-        val divider = context.resources.getDimension(R.dimen.searchWidgetFavoritesVerticalSpacing).toDp()
+    fun calculateRows(
+        context: Context,
+        height: Int,
+    ): Int {
+        val searchBar = context.resources.getDimension(CommonR.dimen.searchWidgetSearchBarHeight).toDp()
+        val margins = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesTopMargin).toDp() +
+            (context.resources.getDimension(CommonR.dimen.searchWidgetPadding).toDp() * 2)
+        val item = context.resources.getDimension(CommonR.dimen.searchWidgetFavoriteItemContainerHeight).toDp()
+        val divider = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesVerticalSpacing).toDp()
         var n = 1
         var totalSize = searchBar + (n * item) + ((n - 1) * divider) + margins
 

@@ -21,10 +21,13 @@ import androidx.core.net.toUri
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.duckduckgo.app.browser.WebNavigationStateChange
-import com.duckduckgo.app.global.ValidUrl
-import com.duckduckgo.app.global.baseHost
-import com.duckduckgo.app.global.getValidUrl
+import com.duckduckgo.app.fire.fireproofwebsite.ui.AutomaticFireproofSetting
 import com.duckduckgo.app.settings.db.SettingsDataStore
+import com.duckduckgo.common.utils.DefaultDispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.ValidUrl
+import com.duckduckgo.common.utils.baseHost
+import com.duckduckgo.common.utils.getValidUrl
 import kotlinx.coroutines.*
 import timber.log.Timber
 
@@ -33,7 +36,10 @@ interface NavigationAwareLoginDetector {
     fun onEvent(navigationEvent: NavigationEvent)
 }
 
-data class LoginDetected(val authLoginDomain: String, val forwardedToDomain: String)
+data class LoginDetected(
+    val authLoginDomain: String,
+    val forwardedToDomain: String,
+)
 
 sealed class NavigationEvent {
     sealed class UserAction : NavigationEvent() {
@@ -52,7 +58,8 @@ sealed class NavigationEvent {
 
 class NextPageLoginDetection constructor(
     private val settingsDataStore: SettingsDataStore,
-    private val appCoroutineScope: CoroutineScope
+    private val appCoroutineScope: CoroutineScope,
+    private val dispatcherProvider: DispatcherProvider = DefaultDispatcherProvider(),
 ) : NavigationAwareLoginDetector {
 
     override val loginEventLiveData = MutableLiveData<LoginDetected>()
@@ -64,7 +71,7 @@ class NextPageLoginDetection constructor(
     private var loginDetectionJob: Job? = null
 
     override fun onEvent(navigationEvent: NavigationEvent) {
-        if (!settingsDataStore.appLoginDetection) return
+        if (settingsDataStore.automaticFireproofSetting == AutomaticFireproofSetting.NEVER) return
 
         Timber.v("LoginDetectionDelegate $navigationEvent")
         return when (navigationEvent) {
@@ -94,7 +101,7 @@ class NextPageLoginDetection constructor(
     private fun scheduleLoginDetection(): Job {
         // Ideally, we should be using a scope tied to the Activity/Fragment lifecycle instead of AppCoroutineScope.
         // AToW, it's not possible to inject such scope as dependency due to our single Component Dagger setup.
-        return appCoroutineScope.launch(Dispatchers.Main) {
+        return appCoroutineScope.launch(dispatcherProvider.main()) {
             delay(NAVIGATION_EVENT_GRACE_PERIOD)
             Timber.v("LoginDetectionDelegate execute Login detection Job for $urlToCheck")
             val loginUrlCandidate = urlToCheck
@@ -206,7 +213,11 @@ class NextPageLoginDetection constructor(
     private sealed class LoginResult {
         data class AuthFlow(val authLoginDomain: String) : LoginResult()
         data class TwoFactorAuthFlow(val loginDomain: String) : LoginResult()
-        data class LoginDetected(val authLoginDomain: String, val forwardedToDomain: String) : LoginResult()
+        data class LoginDetected(
+            val authLoginDomain: String,
+            val forwardedToDomain: String,
+        ) : LoginResult()
+
         object Unknown : LoginResult()
     }
 

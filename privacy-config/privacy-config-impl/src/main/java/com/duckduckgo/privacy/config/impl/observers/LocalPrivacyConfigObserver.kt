@@ -18,38 +18,37 @@ package com.duckduckgo.privacy.config.impl.observers
 
 import android.content.Context
 import androidx.annotation.WorkerThread
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleObserver
-import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.LifecycleOwner
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.di.scopes.AppObjectGraph
+import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.privacy.config.impl.PrivacyConfigPersister
 import com.duckduckgo.privacy.config.impl.R
 import com.duckduckgo.privacy.config.impl.models.JsonPrivacyConfig
 import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
 import com.squareup.anvil.annotations.ContributesMultibinding
 import com.squareup.moshi.Moshi
+import dagger.SingleInstanceIn
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @WorkerThread
-@Singleton
-@ContributesMultibinding(AppObjectGraph::class)
+@SingleInstanceIn(AppScope::class)
+@ContributesMultibinding(
+    scope = AppScope::class,
+    boundType = MainProcessLifecycleObserver::class,
+)
 class LocalPrivacyConfigObserver @Inject constructor(
     private val context: Context,
     private val privacyConfigPersister: PrivacyConfigPersister,
     @AppCoroutineScope val coroutineScope: CoroutineScope,
-    private val dispatcherProvider: DispatcherProvider
-) : LifecycleObserver {
+    private val dispatcherProvider: DispatcherProvider,
+) : MainProcessLifecycleObserver {
 
-    @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
-    fun storeLocalPrivacyConfig() {
-        coroutineScope.launch(dispatcherProvider.io()) {
-            loadPrivacyConfig()
-        }
+    override fun onCreate(owner: LifecycleOwner) {
+        coroutineScope.launch(dispatcherProvider.io()) { loadPrivacyConfig() }
     }
 
     private suspend fun loadPrivacyConfig() {
@@ -65,5 +64,4 @@ class LocalPrivacyConfigObserver @Inject constructor(
         val adapter = moshi.adapter(JsonPrivacyConfig::class.java)
         return adapter.fromJson(json)
     }
-
 }
