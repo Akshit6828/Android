@@ -20,9 +20,9 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
-import com.duckduckgo.app.bookmarks.model.FavoritesRepository
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.global.DuckDuckGoApplication
+import com.duckduckgo.savedsites.api.SavedSitesRepository
 import javax.inject.Inject
 
 class EmptyFavoritesWidgetService : RemoteViewsService() {
@@ -39,10 +39,13 @@ class EmptyFavoritesWidgetService : RemoteViewsService() {
      * This RemoteViewsFactory will not render any item. It's used by is used for convenience to simplify executing background operations to show/hide empty widget CTA.
      * If this RemoteViewsFactory count is 0, SearchAndFavoritesWidget R.id.emptyfavoritesGrid will show the configured EmptyView.
      */
-    class EmptyFavoritesWidgetItemFactory(val context: Context, intent: Intent) : RemoteViewsFactory {
+    class EmptyFavoritesWidgetItemFactory(
+        val context: Context,
+        intent: Intent,
+    ) : RemoteViewsFactory {
 
         @Inject
-        lateinit var favoritesDataRepository: FavoritesRepository
+        lateinit var savedSitesRepository: SavedSitesRepository
 
         private var count = 0
 
@@ -51,7 +54,7 @@ class EmptyFavoritesWidgetService : RemoteViewsService() {
         }
 
         override fun onDataSetChanged() {
-            count = if (favoritesDataRepository.userHasFavorites()) 1 else 0
+            count = if (savedSitesRepository.hasFavorites()) 1 else 0
         }
 
         override fun onDestroy() {

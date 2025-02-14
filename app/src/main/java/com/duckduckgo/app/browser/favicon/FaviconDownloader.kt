@@ -22,20 +22,26 @@ import android.net.Uri
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
-import com.duckduckgo.app.global.DispatcherProvider
-import kotlinx.coroutines.withContext
+import com.duckduckgo.common.utils.DispatcherProvider
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.withContext
 
 interface FaviconDownloader {
     suspend fun getFaviconFromDisk(file: File): Bitmap?
-    suspend fun getFaviconFromDisk(file: File, cornerRadius: Int, width: Int, height: Int): Bitmap?
+    suspend fun getFaviconFromDisk(
+        file: File,
+        cornerRadius: Int,
+        width: Int,
+        height: Int,
+    ): Bitmap?
+
     suspend fun getFaviconFromUrl(uri: Uri): Bitmap?
 }
 
 class GlideFaviconDownloader @Inject constructor(
     private val context: Context,
-    private val dispatcherProvider: DispatcherProvider
+    private val dispatcherProvider: DispatcherProvider,
 ) : FaviconDownloader {
 
     override suspend fun getFaviconFromDisk(file: File): Bitmap? {
@@ -52,7 +58,12 @@ class GlideFaviconDownloader @Inject constructor(
         }
     }
 
-    override suspend fun getFaviconFromDisk(file: File, cornerRadius: Int, width: Int, height: Int): Bitmap? {
+    override suspend fun getFaviconFromDisk(
+        file: File,
+        cornerRadius: Int,
+        width: Int,
+        height: Int,
+    ): Bitmap? {
         return withContext(dispatcherProvider.io()) {
             return@withContext runCatching {
                 Glide.with(context)

@@ -16,25 +16,8 @@
 
 package com.duckduckgo.privacy.config.store
 
-interface PrivacyFeatureTogglesRepository {
-    fun deleteAll()
-    fun get(featureName: String): PrivacyFeatureToggles?
-    fun insert(toggle: PrivacyFeatureToggles)
-}
+interface PrivacyFeatureTogglesRepository : PrivacyFeatureTogglesDataStore
 
-class RealPrivacyFeatureTogglesRepository(database: PrivacyConfigDatabase) : PrivacyFeatureTogglesRepository {
-
-    private val privacyFeatureTogglesDao: PrivacyFeatureTogglesDao = database.privacyFeatureTogglesDao()
-
-    override fun deleteAll() {
-        privacyFeatureTogglesDao.deleteAll()
-    }
-
-    override fun get(featureName: String): PrivacyFeatureToggles? {
-        return privacyFeatureTogglesDao.get(featureName)
-    }
-
-    override fun insert(toggle: PrivacyFeatureToggles) {
-        privacyFeatureTogglesDao.insert(toggle)
-    }
-}
+class RealPrivacyFeatureTogglesRepository(
+    privacyFeatureTogglesDataStore: PrivacyFeatureTogglesDataStore,
+) : PrivacyFeatureTogglesRepository, PrivacyFeatureTogglesDataStore by privacyFeatureTogglesDataStore

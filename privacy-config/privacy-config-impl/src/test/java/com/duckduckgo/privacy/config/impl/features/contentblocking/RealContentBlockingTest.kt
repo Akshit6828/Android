@@ -17,17 +17,18 @@
 package com.duckduckgo.privacy.config.impl.features.contentblocking
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
 import com.duckduckgo.feature.toggles.api.FeatureToggle
-import com.duckduckgo.privacy.config.api.ContentBlockingException
 import com.duckduckgo.privacy.config.api.PrivacyFeatureName
-import com.duckduckgo.privacy.config.impl.features.unprotectedtemporary.UnprotectedTemporary
+import com.duckduckgo.privacy.config.api.UnprotectedTemporary
 import com.duckduckgo.privacy.config.store.features.contentblocking.ContentBlockingRepository
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 @RunWith(AndroidJUnit4::class)
 class RealContentBlockingTest {
@@ -42,7 +43,12 @@ class RealContentBlockingTest {
     fun before() {
         givenFeatureIsEnabled()
 
-        testee = RealContentBlocking(mockContentBlockingRepository, mockFeatureToggle, mockUnprotectedTemporary)
+        testee =
+            RealContentBlocking(
+                mockContentBlockingRepository,
+                mockFeatureToggle,
+                mockUnprotectedTemporary,
+            )
     }
 
     @Test
@@ -61,7 +67,7 @@ class RealContentBlockingTest {
 
     @Test
     fun whenIsAnExceptionAndDomainIsNotListedInTheExceptionsListThenReturnFalse() {
-        whenever(mockContentBlockingRepository.exceptions).thenReturn(arrayListOf())
+        whenever(mockContentBlockingRepository.exceptions).thenReturn(CopyOnWriteArrayList())
 
         assertFalse(testee.isAnException("http://test.example.com"))
     }
@@ -70,7 +76,7 @@ class RealContentBlockingTest {
     fun whenIsAnExceptionAndDomainIsInTheUnprotectedTemporaryListThenReturnTrue() {
         val url = "http://test.example.com"
         whenever(mockUnprotectedTemporary.isAnException(url)).thenReturn(true)
-        whenever(mockContentBlockingRepository.exceptions).thenReturn(arrayListOf())
+        whenever(mockContentBlockingRepository.exceptions).thenReturn(CopyOnWriteArrayList())
 
         assertTrue(testee.isAnException(url))
     }
@@ -84,18 +90,30 @@ class RealContentBlockingTest {
     }
 
     private fun givenThereAreExceptions() {
-        whenever(mockContentBlockingRepository.exceptions).thenReturn(
-            arrayListOf(
-                ContentBlockingException("example.com", "my reason here")
-            )
-        )
+        val exceptions =
+            CopyOnWriteArrayList<FeatureException>().apply {
+                add(FeatureException("example.com", "my reason here"))
+            }
+        whenever(mockContentBlockingRepository.exceptions).thenReturn(exceptions)
     }
 
     private fun givenFeatureIsEnabled() {
-        whenever(mockFeatureToggle.isFeatureEnabled(PrivacyFeatureName.ContentBlockingFeatureName(), true)).thenReturn(true)
+        whenever(
+            mockFeatureToggle.isFeatureEnabled(
+                PrivacyFeatureName.ContentBlockingFeatureName.value,
+                true,
+            ),
+        )
+            .thenReturn(true)
     }
 
     private fun givenFeatureIsDisabled() {
-        whenever(mockFeatureToggle.isFeatureEnabled(PrivacyFeatureName.ContentBlockingFeatureName(), true)).thenReturn(false)
+        whenever(
+            mockFeatureToggle.isFeatureEnabled(
+                PrivacyFeatureName.ContentBlockingFeatureName.value,
+                true,
+            ),
+        )
+            .thenReturn(false)
     }
 }

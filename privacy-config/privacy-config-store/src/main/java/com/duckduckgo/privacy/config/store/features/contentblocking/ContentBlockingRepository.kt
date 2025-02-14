@@ -16,28 +16,35 @@
 
 package com.duckduckgo.privacy.config.store.features.contentblocking
 
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.privacy.config.api.ContentBlockingException
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
 import com.duckduckgo.privacy.config.store.ContentBlockingExceptionEntity
 import com.duckduckgo.privacy.config.store.PrivacyConfigDatabase
-import com.duckduckgo.privacy.config.store.toContentBlockingException
+import com.duckduckgo.privacy.config.store.toFeatureException
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 interface ContentBlockingRepository {
     fun updateAll(exceptions: List<ContentBlockingExceptionEntity>)
-    val exceptions: ArrayList<ContentBlockingException>
+    val exceptions: CopyOnWriteArrayList<FeatureException>
 }
 
-class RealContentBlockingRepository(val database: PrivacyConfigDatabase, coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider) :
-    ContentBlockingRepository {
+class RealContentBlockingRepository(
+    val database: PrivacyConfigDatabase,
+    coroutineScope: CoroutineScope,
+    dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
+) : ContentBlockingRepository {
 
     private val contentBlockingDao: ContentBlockingDao = database.contentBlockingDao()
-    override val exceptions = ArrayList<ContentBlockingException>()
+    override val exceptions = CopyOnWriteArrayList<FeatureException>()
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 
@@ -48,8 +55,6 @@ class RealContentBlockingRepository(val database: PrivacyConfigDatabase, corouti
 
     private fun loadToMemory() {
         exceptions.clear()
-        contentBlockingDao.getAll().map {
-            exceptions.add(it.toContentBlockingException())
-        }
+        contentBlockingDao.getAll().map { exceptions.add(it.toFeatureException()) }
     }
 }

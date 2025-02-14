@@ -26,17 +26,23 @@ class AppIconsAdapter(private val onClick: (ChangeIconViewModel.IconViewData) ->
     private var iconViewData: MutableList<ChangeIconViewModel.IconViewData> = mutableListOf()
 
     class IconViewHolder(
-        val binding: ItemAppIconBinding
+        val binding: ItemAppIconBinding,
     ) : RecyclerView.ViewHolder(binding.root)
 
     override fun getItemCount() = iconViewData.size
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): IconViewHolder {
+    override fun onCreateViewHolder(
+        parent: ViewGroup,
+        viewType: Int,
+    ): IconViewHolder {
         val binding = ItemAppIconBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return IconViewHolder(binding)
     }
 
-    override fun onBindViewHolder(holder: IconViewHolder, position: Int) {
+    override fun onBindViewHolder(
+        holder: IconViewHolder,
+        position: Int,
+    ) {
         val viewElement = iconViewData[position]
         holder.itemView.setOnClickListener { onClick.invoke(viewElement) }
         holder.binding.icon.setBackgroundResource(viewElement.appIcon.icon)

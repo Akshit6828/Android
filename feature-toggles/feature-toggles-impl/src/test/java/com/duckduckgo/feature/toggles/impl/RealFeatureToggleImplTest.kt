@@ -16,32 +16,34 @@
 
 package com.duckduckgo.feature.toggles.impl
 
-import com.duckduckgo.app.global.plugins.PluginPoint
-import com.duckduckgo.feature.toggles.api.FeatureName
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.feature.toggles.api.FeatureTogglesPlugin
 import org.junit.Assert.*
 import org.junit.Test
 
 class RealFeatureToggleImplTest {
 
-    private val testee: RealFeatureToggleImpl = RealFeatureToggleImpl(FakeFeatureTogglePluginPoint())
+    private val testee: RealFeatureToggleImpl =
+        RealFeatureToggleImpl(FakeFeatureTogglePluginPoint())
 
     @Test
     fun whenFeatureNameCanBeHandledByPluginThenReturnTheCorrectValue() {
-        val result = testee.isFeatureEnabled(TrueFeatureName(), false)
+        val result = testee.isFeatureEnabled(TrueFeatureName().value, false)
         assertNotNull(result)
-        assertTrue(result!!)
+        assertTrue(result)
     }
 
-    @Test
-    fun whenFeatureNameCannotBeHandledByAnyPluginThenReturnNull() {
-        val result = testee.isFeatureEnabled(NullFeatureName(), false)
-        assertNull(result)
+    @Test(expected = IllegalArgumentException::class)
+    fun whenFeatureNameCannotBeHandledByAnyPluginThenThrowException() {
+        testee.isFeatureEnabled(NullFeatureName().value, false)
     }
 
     class FakeTruePlugin : FeatureTogglesPlugin {
-        override fun isEnabled(featureName: FeatureName, defaultValue: Boolean): Boolean? {
-            return if (featureName is TrueFeatureName) {
+        override fun isEnabled(
+            featureName: String,
+            defaultValue: Boolean,
+        ): Boolean? {
+            return if (featureName == TrueFeatureName().value) {
                 true
             } else {
                 null
@@ -55,6 +57,6 @@ class RealFeatureToggleImplTest {
         }
     }
 
-    data class TrueFeatureName(override val value: String = "true") : FeatureName
-    data class NullFeatureName(override val value: String = "null") : FeatureName
+    data class TrueFeatureName(val value: String = "true")
+    data class NullFeatureName(val value: String = "null")
 }

@@ -16,14 +16,16 @@
 
 package com.duckduckgo.app.feedback.ui.positive.initial
 
-import androidx.lifecycle.Observer
+import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ContentFeedbackPositiveLandingBinding
 import com.duckduckgo.app.feedback.ui.common.FeedbackFragment
-import com.duckduckgo.app.playstore.PlayStoreUtils
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.playstore.PlayStoreUtils
+import com.duckduckgo.di.scopes.FragmentScope
 import javax.inject.Inject
 
+@InjectWith(FragmentScope::class)
 class PositiveFeedbackLandingFragment : FeedbackFragment(R.layout.content_feedback_positive_landing) {
 
     interface PositiveFeedbackLandingListener {
@@ -43,23 +45,20 @@ class PositiveFeedbackLandingFragment : FeedbackFragment(R.layout.content_feedba
     lateinit var playStoreUtils: PlayStoreUtils
 
     override fun configureViewModelObservers() {
-        viewModel.command.observe(
-            this,
-            Observer { command ->
-                when (command) {
-                    Command.LaunchPlayStore -> {
-                        launchPlayStore()
-                        listener?.userSelectedToRateApp()
-                    }
-                    Command.Exit -> {
-                        listener?.userGavePositiveFeedbackNoDetails()
-                    }
-                    Command.LaunchShareFeedbackPage -> {
-                        listener?.userSelectedToGiveFeedback()
-                    }
+        viewModel.command.observe(this) { command ->
+            when (command) {
+                Command.LaunchPlayStore -> {
+                    launchPlayStore()
+                    listener?.userSelectedToRateApp()
+                }
+                Command.Exit -> {
+                    listener?.userGavePositiveFeedbackNoDetails()
+                }
+                Command.LaunchShareFeedbackPage -> {
+                    listener?.userSelectedToGiveFeedback()
                 }
             }
-        )
+        }
     }
 
     override fun configureListeners() {

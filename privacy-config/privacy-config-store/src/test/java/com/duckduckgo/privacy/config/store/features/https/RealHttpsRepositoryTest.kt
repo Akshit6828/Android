@@ -16,26 +16,25 @@
 
 package com.duckduckgo.privacy.config.store.features.https
 
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.runBlocking
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.privacy.config.store.HttpsExceptionEntity
 import com.duckduckgo.privacy.config.store.PrivacyConfigDatabase
-import com.duckduckgo.privacy.config.store.toHttpsException
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.reset
-import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.whenever
-import kotlinx.coroutines.test.TestCoroutineScope
+import com.duckduckgo.privacy.config.store.toFeatureException
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.ArgumentMatchers
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 class RealHttpsRepositoryTest {
 
-    @get:Rule
-    var coroutineRule = CoroutineTestRule()
+    @get:Rule var coroutineRule = CoroutineTestRule()
 
     lateinit var testee: RealHttpsRepository
 
@@ -45,54 +44,64 @@ class RealHttpsRepositoryTest {
     @Before
     fun before() {
         whenever(mockDatabase.httpsDao()).thenReturn(mockHttpsDao)
-        testee = RealHttpsRepository(
-            mockDatabase,
-            TestCoroutineScope(),
-            coroutineRule.testDispatcherProvider
-        )
+        testee =
+            RealHttpsRepository(
+                mockDatabase,
+                TestScope(),
+                coroutineRule.testDispatcherProvider,
+                true,
+            )
     }
 
     @Test
     fun whenRepositoryIsCreatedThenExceptionsLoadedIntoMemory() {
         givenHttpsDaoContainsExceptions()
 
-        testee = RealHttpsRepository(
-            mockDatabase,
-            TestCoroutineScope(),
-            coroutineRule.testDispatcherProvider
-        )
+        testee =
+            RealHttpsRepository(
+                mockDatabase,
+                TestScope(),
+                coroutineRule.testDispatcherProvider,
+                true,
+            )
 
-        assertEquals(httpException.toHttpsException(), testee.exceptions.first())
+        assertEquals(httpException.toFeatureException(), testee.exceptions.first())
     }
 
     @Test
-    fun whenUpdateAllThenUpdateAllCalled() = coroutineRule.runBlocking {
-        testee = RealHttpsRepository(
-            mockDatabase,
-            TestCoroutineScope(),
-            coroutineRule.testDispatcherProvider
-        )
+    fun whenUpdateAllThenUpdateAllCalled() =
+        runTest {
+            testee =
+                RealHttpsRepository(
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    true,
+                )
 
-        testee.updateAll(listOf())
+            testee.updateAll(listOf())
 
-        verify(mockHttpsDao).updateAll(ArgumentMatchers.anyList())
-    }
+            verify(mockHttpsDao).updateAll(ArgumentMatchers.anyList())
+        }
 
     @Test
-    fun whenUpdateAllThenPreviousExceptionsAreCleared() = coroutineRule.runBlocking {
-        givenHttpsDaoContainsExceptions()
-        testee = RealHttpsRepository(
-            mockDatabase,
-            TestCoroutineScope(),
-            coroutineRule.testDispatcherProvider
-        )
-        assertEquals(1, testee.exceptions.size)
-        reset(mockHttpsDao)
+    fun whenUpdateAllThenPreviousExceptionsAreCleared() =
+        runTest {
+            givenHttpsDaoContainsExceptions()
+            testee =
+                RealHttpsRepository(
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    true,
+                )
+            assertEquals(1, testee.exceptions.size)
+            reset(mockHttpsDao)
 
-        testee.updateAll(listOf())
+            testee.updateAll(listOf())
 
-        assertEquals(0, testee.exceptions.size)
-    }
+            assertEquals(0, testee.exceptions.size)
+        }
 
     private fun givenHttpsDaoContainsExceptions() {
         whenever(mockHttpsDao.getAll()).thenReturn(listOf(httpException))
