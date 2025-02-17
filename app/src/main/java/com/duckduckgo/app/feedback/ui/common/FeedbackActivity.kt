@@ -21,9 +21,11 @@ import android.app.Activity.RESULT_OK
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.FragmentTransaction
 import androidx.fragment.app.transaction
-import androidx.lifecycle.Observer
+import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
+import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityFragmentWithToolbarBinding
 import com.duckduckgo.app.feedback.ui.initial.InitialFeedbackFragment
@@ -33,11 +35,15 @@ import com.duckduckgo.app.feedback.ui.negative.mainreason.MainReasonNegativeFeed
 import com.duckduckgo.app.feedback.ui.negative.openended.ShareOpenEndedFeedbackFragment
 import com.duckduckgo.app.feedback.ui.negative.subreason.SubReasonNegativeFeedbackFragment
 import com.duckduckgo.app.feedback.ui.positive.initial.PositiveFeedbackLandingFragment
-import com.duckduckgo.app.global.DuckDuckGoActivity
-import com.duckduckgo.mobile.android.ui.view.hideKeyboard
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
+import com.duckduckgo.browser.api.ui.BrowserScreens.FeedbackActivityWithEmptyParams
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.view.hideKeyboard
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.di.scopes.ActivityScope
 import timber.log.Timber
 
+@InjectWith(ActivityScope::class)
+@ContributeToActivityStarter(FeedbackActivityWithEmptyParams::class)
 class FeedbackActivity :
     DuckDuckGoActivity(),
     InitialFeedbackFragment.InitialFeedbackListener,
@@ -59,21 +65,23 @@ class FeedbackActivity :
         setContentView(binding.root)
         setupToolbar(toolbar)
         configureObservers()
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    viewModel.onBackPressed()
+                }
+            },
+        )
     }
 
     private fun configureObservers() {
-        viewModel.command.observe(
-            this,
-            Observer {
-                it?.let { command -> processCommand(command) }
-            }
-        )
-        viewModel.updateViewCommand.observe(
-            this,
-            Observer {
-                it?.let { viewState -> render(viewState) }
-            }
-        )
+        viewModel.command.observe(this) {
+            it?.let { command -> processCommand(command) }
+        }
+        viewModel.updateViewCommand.observe(this) {
+            it?.let { viewState -> render(viewState) }
+        }
     }
 
     private fun processCommand(command: Command) {
@@ -109,12 +117,19 @@ class FeedbackActivity :
         updateFragment(fragment, forwardDirection)
     }
 
-    private fun showNegativeFeedbackSubReasonView(forwardDirection: Boolean, mainReason: MainReason) {
+    private fun showNegativeFeedbackSubReasonView(
+        forwardDirection: Boolean,
+        mainReason: MainReason,
+    ) {
         val fragment = SubReasonNegativeFeedbackFragment.instance(mainReason)
         updateFragment(fragment, forwardDirection)
     }
 
-    private fun showNegativeOpenEndedFeedbackView(forwardDirection: Boolean, mainReason: MainReason, subReason: SubReason? = null) {
+    private fun showNegativeOpenEndedFeedbackView(
+        forwardDirection: Boolean,
+        mainReason: MainReason,
+        subReason: SubReason? = null,
+    ) {
         val fragment = ShareOpenEndedFeedbackFragment.instanceNegativeFeedback(mainReason, subReason)
         updateFragment(fragment, forwardDirection)
     }
@@ -134,7 +149,10 @@ class FeedbackActivity :
         updateFragment(fragment, forwardDirection)
     }
 
-    private fun updateFragment(fragment: FeedbackFragment, forwardDirection: Boolean) {
+    private fun updateFragment(
+        fragment: FeedbackFragment,
+        forwardDirection: Boolean,
+    ) {
         val tag = fragment.javaClass.name
         if (supportFragmentManager.findFragmentByTag(tag) != null) return
 
@@ -142,10 +160,6 @@ class FeedbackActivity :
             this.applyTransition(forwardDirection)
             replace(R.id.fragmentContainer, fragment, fragment.tag)
         }
-    }
-
-    override fun onBackPressed() {
-        viewModel.onBackPressed()
     }
 
     /**
@@ -185,7 +199,11 @@ class FeedbackActivity :
     /**
      * Negative feedback listeners
      */
-    override fun userProvidedNegativeOpenEndedFeedback(mainReason: MainReason, subReason: SubReason?, feedback: String) {
+    override fun userProvidedNegativeOpenEndedFeedback(
+        mainReason: MainReason,
+        subReason: SubReason?,
+        feedback: String,
+    ) {
         viewModel.userProvidedNegativeOpenEndedFeedback(mainReason, subReason, feedback)
     }
 
@@ -200,26 +218,41 @@ class FeedbackActivity :
      * Negative feedback subReason selection
      */
 
-    override fun userSelectedSubReasonMissingBrowserFeatures(mainReason: MainReason, subReason: MissingBrowserFeaturesSubReasons) {
+    override fun userSelectedSubReasonMissingBrowserFeatures(
+        mainReason: MainReason,
+        subReason: MissingBrowserFeaturesSubReasons,
+    ) {
         viewModel.userSelectedSubReasonMissingBrowserFeatures(mainReason, subReason)
     }
 
-    override fun userSelectedSubReasonSearchNotGoodEnough(mainReason: MainReason, subReason: SearchNotGoodEnoughSubReasons) {
+    override fun userSelectedSubReasonSearchNotGoodEnough(
+        mainReason: MainReason,
+        subReason: SearchNotGoodEnoughSubReasons,
+    ) {
         viewModel.userSelectedSubReasonSearchNotGoodEnough(mainReason, subReason)
     }
 
-    override fun userSelectedSubReasonNeedMoreCustomization(mainReason: MainReason, subReason: CustomizationSubReasons) {
+    override fun userSelectedSubReasonNeedMoreCustomization(
+        mainReason: MainReason,
+        subReason: CustomizationSubReasons,
+    ) {
         viewModel.userSelectedSubReasonNeedMoreCustomization(mainReason, subReason)
     }
 
-    override fun userSelectedSubReasonAppIsSlowOrBuggy(mainReason: MainReason, subReason: PerformanceSubReasons) {
+    override fun userSelectedSubReasonAppIsSlowOrBuggy(
+        mainReason: MainReason,
+        subReason: PerformanceSubReasons,
+    ) {
         viewModel.userSelectedSubReasonAppIsSlowOrBuggy(mainReason, subReason)
     }
 
     /**
      * Negative feedback, broken site
      */
-    override fun onProvidedBrokenSiteFeedback(feedback: String, url: String?) {
+    override fun onProvidedBrokenSiteFeedback(
+        feedback: String,
+        url: String?,
+    ) {
         viewModel.onProvidedBrokenSiteFeedback(feedback, url)
     }
 
@@ -244,13 +277,13 @@ private fun FeedbackActivity.animateFinish(feedbackSubmitted: Boolean) {
     setResult(resultCode)
 
     finish()
-    overridePendingTransition(R.anim.slide_from_left, R.anim.slide_to_right)
+    overridePendingTransition(com.duckduckgo.mobile.android.R.anim.slide_from_left, com.duckduckgo.mobile.android.R.anim.slide_to_right)
 }
 
 private fun FragmentTransaction.applyTransition(forwardDirection: Boolean) {
     if (forwardDirection) {
-        setCustomAnimations(R.anim.slide_from_right, R.anim.slide_to_left)
+        setCustomAnimations(com.duckduckgo.mobile.android.R.anim.slide_from_right, com.duckduckgo.mobile.android.R.anim.slide_to_left)
     } else {
-        setCustomAnimations(R.anim.slide_from_left, R.anim.slide_to_right)
+        setCustomAnimations(com.duckduckgo.mobile.android.R.anim.slide_from_left, com.duckduckgo.mobile.android.R.anim.slide_to_right)
     }
 }

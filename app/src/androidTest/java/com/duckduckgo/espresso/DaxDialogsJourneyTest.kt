@@ -42,9 +42,11 @@ class DaxDialogsJourneyTest {
     @get:Rule
     var activityScenarioRule = activityScenarioRule<OnboardingActivity>()
 
-    @Test @UserJourney @FlakyTest @SdkSuppress(minSdkVersion = Build.VERSION_CODES.N, maxSdkVersion = Build.VERSION_CODES.P)
+    @Test
+    @UserJourney
+    @FlakyTest
+    @SdkSuppress(minSdkVersion = Build.VERSION_CODES.O, maxSdkVersion = Build.VERSION_CODES.P)
     fun daxDialogs_supports_default_browser_journey() {
-
         onView(isRoot()).perform(waitForView(withId(R.id.primaryCta)))
         onView(withId(R.id.primaryCta)).perform(click())
 
@@ -54,7 +56,6 @@ class DaxDialogsJourneyTest {
         onView(isRoot()).perform(waitForView(withId(R.id.browserMenu)))
         onView(withId(R.id.browserMenu)).perform(click())
 
-        onView(withId(R.id.forwardPopupMenuItem)).check(matches(isDisplayed()))
+        onView(withId(R.id.forwardMenuItem)).check(matches(isDisplayed()))
     }
-
 }

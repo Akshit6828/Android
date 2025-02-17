@@ -17,20 +17,26 @@
 package com.duckduckgo.app
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityWidgetConfigurationBinding
-import com.duckduckgo.app.global.DuckDuckGoActivity
 import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.di.scopes.ActivityScope
+import com.duckduckgo.widget.SearchAndFavoritesWidget
 import com.duckduckgo.widget.WidgetPreferences
 import com.duckduckgo.widget.WidgetTheme
 import javax.inject.Inject
 
+@InjectWith(ActivityScope::class)
 class WidgetThemeConfiguration : DuckDuckGoActivity() {
 
     @Inject
@@ -39,8 +45,12 @@ class WidgetThemeConfiguration : DuckDuckGoActivity() {
     @Inject
     lateinit var pixel: Pixel
 
+    @Inject
+    lateinit var appBuildConfig: AppBuildConfig
+
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    @Suppress("NewApi") // we use appBuildConfig
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val binding = ActivityWidgetConfigurationBinding.inflate(layoutInflater)
@@ -58,7 +68,7 @@ class WidgetThemeConfiguration : DuckDuckGoActivity() {
             finish()
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (appBuildConfig.sdkInt >= Build.VERSION_CODES.Q) {
             binding.widgetConfigThemeSystem.visibility = View.VISIBLE
             binding.widgetConfigThemeSystem.isChecked = true
         } else {
@@ -78,11 +88,11 @@ class WidgetThemeConfiguration : DuckDuckGoActivity() {
                     if (currentNightMode == Configuration.UI_MODE_NIGHT_YES) {
                         binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_dark_preview)
                     } else {
-                        binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_preview)
+                        binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_light_preview)
                     }
                 }
                 R.id.widgetConfigThemeLight -> {
-                    binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_preview)
+                    binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_light_preview)
                 }
                 R.id.widgetConfigThemeDark -> {
                     binding.widgetConfigPreview.setImageResource(R.drawable.search_favorites_widget_dark_preview)
@@ -109,10 +119,16 @@ class WidgetThemeConfiguration : DuckDuckGoActivity() {
         pixel.fire(AppPixelName.FAVORITE_WIDGET_CONFIGURATION_SHOWN)
     }
 
-    private fun storeAndSubmitConfiguration(widgetId: Int, selectedTheme: WidgetTheme) {
+    private fun storeAndSubmitConfiguration(
+        widgetId: Int,
+        selectedTheme: WidgetTheme,
+    ) {
         widgetPrefs.saveWidgetSelectedTheme(widgetId, selectedTheme.toString())
         pixelSelectedTheme(selectedTheme)
-        val widgetUpdateIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+
+        val widgetUpdateIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+            component = ComponentName(this@WidgetThemeConfiguration, SearchAndFavoritesWidget::class.java)
+        }
         val widgetsToUpdate = IntArray(1).also { it[0] = widgetId }
         widgetUpdateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetsToUpdate)
         sendBroadcast(widgetUpdateIntent)

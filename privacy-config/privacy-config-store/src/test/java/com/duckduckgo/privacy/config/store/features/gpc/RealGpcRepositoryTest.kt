@@ -16,67 +16,144 @@
 
 package com.duckduckgo.privacy.config.store.features.gpc
 
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.runBlocking
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.privacy.config.store.GpcContentScopeConfigEntity
 import com.duckduckgo.privacy.config.store.GpcExceptionEntity
+import com.duckduckgo.privacy.config.store.GpcHeaderEnabledSiteEntity
 import com.duckduckgo.privacy.config.store.PrivacyConfigDatabase
 import com.duckduckgo.privacy.config.store.toGpcException
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.reset
-import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.whenever
-import kotlinx.coroutines.test.TestCoroutineScope
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.ArgumentMatchers.anyList
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 class RealGpcRepositoryTest {
-    @get:Rule
-    var coroutineRule = CoroutineTestRule()
+    @get:Rule var coroutineRule = CoroutineTestRule()
 
     lateinit var testee: RealGpcRepository
 
     private val mockDatabase: PrivacyConfigDatabase = mock()
-    private val mockGpcDao: GpcDao = mock()
+    private val mockGpcExceptionsDao: GpcExceptionsDao = mock()
+    private val mockGpcHeadersDao: GpcHeadersDao = mock()
+    private val mockGpcContentScopeDao: GpcContentScopeConfigDao = mock()
     private val mockGpcDataStore: GpcDataStore = mock()
 
     @Before
     fun before() {
-        whenever(mockDatabase.gpcDao()).thenReturn(mockGpcDao)
-        testee = RealGpcRepository(mockGpcDataStore, mockDatabase, TestCoroutineScope(), coroutineRule.testDispatcherProvider)
+        whenever(mockDatabase.gpcHeadersDao()).thenReturn(mockGpcHeadersDao)
+        whenever(mockDatabase.gpcExceptionsDao()).thenReturn(mockGpcExceptionsDao)
+        whenever(mockDatabase.gpcContentScopeConfigDao()).thenReturn(mockGpcContentScopeDao)
+        testee =
+            RealGpcRepository(
+                mockGpcDataStore,
+                mockDatabase,
+                TestScope(),
+                coroutineRule.testDispatcherProvider,
+                true,
+            )
     }
 
     @Test
     fun whenRepositoryIsCreatedThenExceptionsLoadedIntoMemory() {
         givenGpcDaoContainsExceptions()
 
-        testee = RealGpcRepository(mockGpcDataStore, mockDatabase, TestCoroutineScope(), coroutineRule.testDispatcherProvider)
+        testee =
+            RealGpcRepository(
+                mockGpcDataStore,
+                mockDatabase,
+                TestScope(),
+                coroutineRule.testDispatcherProvider,
+                isMainProcess = true,
+            )
 
         assertEquals(gpcException.toGpcException(), testee.exceptions.first())
     }
 
     @Test
-    fun whenUpdateAllThenUpdateAllCalled() = coroutineRule.runBlocking {
-        testee = RealGpcRepository(mockGpcDataStore, mockDatabase, TestCoroutineScope(), coroutineRule.testDispatcherProvider)
+    fun whenUpdateAllThenUpdateAllCalled() =
+        runTest {
+            testee =
+                RealGpcRepository(
+                    mockGpcDataStore,
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    isMainProcess = true,
+                )
 
-        testee.updateAll(listOf())
+            testee.updateAll(listOf(), listOf(), configEntity)
 
-        verify(mockGpcDao).updateAll(anyList())
-    }
+            verify(mockGpcExceptionsDao).updateAll(anyList())
+            verify(mockGpcHeadersDao).updateAll(anyList())
+            verify(mockGpcContentScopeDao).insert(configEntity)
+        }
 
     @Test
-    fun whenUpdateAllThenPreviousExceptionsAreCleared() = coroutineRule.runBlocking {
-        givenGpcDaoContainsExceptions()
-        testee = RealGpcRepository(mockGpcDataStore, mockDatabase, TestCoroutineScope(), coroutineRule.testDispatcherProvider)
-        assertEquals(1, testee.exceptions.size)
-        reset(mockGpcDao)
+    fun whenUpdateAllThenPreviousExceptionsAreCleared() =
+        runTest {
+            givenGpcDaoContainsExceptions()
+            testee =
+                RealGpcRepository(
+                    mockGpcDataStore,
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    isMainProcess = true,
+                )
+            assertEquals(1, testee.exceptions.size)
+            reset(mockGpcExceptionsDao)
 
-        testee.updateAll(listOf())
+            testee.updateAll(listOf(), listOf(), configEntity)
 
-        assertEquals(0, testee.exceptions.size)
-    }
+            assertEquals(0, testee.exceptions.size)
+        }
+
+    @Test
+    fun whenUpdateAllThenPreviousHeadersAreCleared() =
+        runTest {
+            givenGpcDaoContainsHeaders()
+            testee =
+                RealGpcRepository(
+                    mockGpcDataStore,
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    isMainProcess = true,
+                )
+            assertEquals(1, testee.headerEnabledSites.size)
+            reset(mockGpcHeadersDao)
+
+            testee.updateAll(listOf(), listOf(), configEntity)
+
+            assertEquals(0, testee.headerEnabledSites.size)
+        }
+
+    @Test
+    fun whenUpdateAllThenReplaceConfig() =
+        runTest {
+            givenGpcDaoContainsConfig(configEntity)
+            testee =
+                RealGpcRepository(
+                    mockGpcDataStore,
+                    mockDatabase,
+                    TestScope(),
+                    coroutineRule.testDispatcherProvider,
+                    isMainProcess = true,
+                )
+            assertEquals(configEntity.config, testee.gpcContentScopeConfig)
+            givenGpcDaoContainsConfig(configEntity2)
+
+            testee.updateAll(listOf(), listOf(), configEntity2)
+
+            assertEquals(configEntity2.config, testee.gpcContentScopeConfig)
+        }
 
     @Test
     fun whenEnableGpcThenSetGpcEnabledToTrue() {
@@ -102,10 +179,21 @@ class RealGpcRepositoryTest {
     }
 
     private fun givenGpcDaoContainsExceptions() {
-        whenever(mockGpcDao.getAll()).thenReturn(listOf(gpcException))
+        whenever(mockGpcExceptionsDao.getAll()).thenReturn(listOf(gpcException))
+    }
+
+    private fun givenGpcDaoContainsHeaders() {
+        whenever(mockGpcHeadersDao.getAll()).thenReturn(listOf(gpcHeader))
+    }
+
+    private fun givenGpcDaoContainsConfig(configEntity: GpcContentScopeConfigEntity) {
+        whenever(mockGpcContentScopeDao.getConfig()).thenReturn(configEntity)
     }
 
     companion object {
         val gpcException = GpcExceptionEntity("example.com")
+        val gpcHeader = GpcHeaderEnabledSiteEntity("example.com")
+        val configEntity = GpcContentScopeConfigEntity(config = "{\"feature\":{\"state\":\"enabled\"}}")
+        val configEntity2 = GpcContentScopeConfigEntity(config = "{\"feature\":{\"state\":\"disabled\"}}")
     }
 }

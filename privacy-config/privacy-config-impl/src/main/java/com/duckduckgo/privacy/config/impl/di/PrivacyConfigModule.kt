@@ -17,23 +17,26 @@
 package com.duckduckgo.privacy.config.impl.di
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.room.Room
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.AppUrl
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.app.global.plugins.PluginPoint
-import com.duckduckgo.di.scopes.AppObjectGraph
-import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
-import com.duckduckgo.privacy.config.impl.network.PrivacyConfigService
-import com.duckduckgo.privacy.config.impl.plugins.PrivacyFeaturePlugin
-import com.duckduckgo.privacy.config.impl.plugins.PrivacyFeaturePluginPoint
+import com.duckduckgo.app.di.IsMainProcess
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.di.scopes.AppScope
+import com.duckduckgo.privacy.config.store.ALL_MIGRATIONS
 import com.duckduckgo.privacy.config.store.PrivacyConfigDatabase
 import com.duckduckgo.privacy.config.store.PrivacyConfigRepository
+import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesDataStore
 import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesRepository
+import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesSharedPreferences
 import com.duckduckgo.privacy.config.store.RealPrivacyConfigRepository
 import com.duckduckgo.privacy.config.store.RealPrivacyFeatureTogglesRepository
+import com.duckduckgo.privacy.config.store.features.amplinks.AmpLinksRepository
+import com.duckduckgo.privacy.config.store.features.amplinks.RealAmpLinksRepository
 import com.duckduckgo.privacy.config.store.features.contentblocking.ContentBlockingRepository
 import com.duckduckgo.privacy.config.store.features.contentblocking.RealContentBlockingRepository
+import com.duckduckgo.privacy.config.store.features.drm.DrmRepository
+import com.duckduckgo.privacy.config.store.features.drm.RealDrmRepository
 import com.duckduckgo.privacy.config.store.features.gpc.GpcDataStore
 import com.duckduckgo.privacy.config.store.features.gpc.GpcRepository
 import com.duckduckgo.privacy.config.store.features.gpc.GpcSharedPreferences
@@ -42,111 +45,146 @@ import com.duckduckgo.privacy.config.store.features.https.HttpsRepository
 import com.duckduckgo.privacy.config.store.features.https.RealHttpsRepository
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.RealTrackerAllowlistRepository
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
+import com.duckduckgo.privacy.config.store.features.trackingparameters.RealTrackingParametersRepository
+import com.duckduckgo.privacy.config.store.features.trackingparameters.TrackingParametersRepository
 import com.duckduckgo.privacy.config.store.features.unprotectedtemporary.RealUnprotectedTemporaryRepository
 import com.duckduckgo.privacy.config.store.features.unprotectedtemporary.UnprotectedTemporaryRepository
 import com.squareup.anvil.annotations.ContributesTo
-import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
-import dagger.multibindings.Multibinds
+import dagger.SingleInstanceIn
 import kotlinx.coroutines.CoroutineScope
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
-import javax.inject.Named
-import javax.inject.Singleton
 
 @Module
-@ContributesTo(AppObjectGraph::class)
-abstract class PrivacyFeaturesBindingModule {
-
-    @Multibinds
-    abstract fun providePrivacyFeatureStorePlugins(): Set<@JvmSuppressWildcards PrivacyFeaturePlugin>
-
-}
-
-@Module
-@ContributesTo(AppObjectGraph::class)
-class NetworkModule {
+@ContributesTo(AppScope::class)
+object DatabaseModule {
 
     @Provides
-    @Singleton
-    fun apiRetrofit(@Named("api") okHttpClient: OkHttpClient): PrivacyConfigService {
-        val moshi = Moshi.Builder().add(JSONObjectAdapter()).build()
-        val retrofit = Retrofit.Builder()
-            .baseUrl(AppUrl.Url.API)
-            .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
-            .build()
-
-        return retrofit.create(PrivacyConfigService::class.java)
+    @ConfigPersisterPreferences
+    fun providePrivacyConfigPersisterPreferences(context: Context): SharedPreferences {
+        return context.getSharedPreferences("com.duckduckgo.privacy.config.persister.preferences.v1", Context.MODE_PRIVATE)
     }
 
-    @Provides
-    @Singleton
-    fun providePrivacyFeaturePluginPoint(customConfigs: Set<@JvmSuppressWildcards PrivacyFeaturePlugin>): PluginPoint<PrivacyFeaturePlugin> {
-        return PrivacyFeaturePluginPoint(customConfigs)
-    }
-}
-
-@Module
-@ContributesTo(AppObjectGraph::class)
-class DatabaseModule {
-
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
     fun providePrivacyConfigDatabase(context: Context): PrivacyConfigDatabase {
         return Room.databaseBuilder(context, PrivacyConfigDatabase::class.java, "privacy_config.db")
             .enableMultiInstanceInvalidation()
             .fallbackToDestructiveMigration()
+            .addMigrations(*ALL_MIGRATIONS)
             .build()
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
     fun providePrivacyConfigRepository(database: PrivacyConfigDatabase): PrivacyConfigRepository {
         return RealPrivacyConfigRepository(database)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun providePTrackerAllowlistRepository(database: PrivacyConfigDatabase, @AppCoroutineScope coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider): TrackerAllowlistRepository {
-        return RealTrackerAllowlistRepository(database, coroutineScope, dispatcherProvider)
+    fun providePTrackerAllowlistRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): TrackerAllowlistRepository {
+        return RealTrackerAllowlistRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun provideContentBlockingRepository(database: PrivacyConfigDatabase, @AppCoroutineScope coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider): ContentBlockingRepository {
-        return RealContentBlockingRepository(database, coroutineScope, dispatcherProvider)
+    fun provideContentBlockingRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): ContentBlockingRepository {
+        return RealContentBlockingRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
     fun provideGpcDataStore(context: Context): GpcDataStore {
         return GpcSharedPreferences(context)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun provideGpcRepository(gpcDataStore: GpcDataStore, database: PrivacyConfigDatabase, @AppCoroutineScope coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider): GpcRepository {
-        return RealGpcRepository(gpcDataStore, database, coroutineScope, dispatcherProvider)
+    fun providePrivacyFeatureTogglesDataStore(context: Context): PrivacyFeatureTogglesDataStore {
+        return PrivacyFeatureTogglesSharedPreferences(context)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun provideHttpsRepository(database: PrivacyConfigDatabase, @AppCoroutineScope coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider): HttpsRepository {
-        return RealHttpsRepository(database, coroutineScope, dispatcherProvider)
+    fun provideGpcRepository(
+        gpcDataStore: GpcDataStore,
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): GpcRepository {
+        return RealGpcRepository(gpcDataStore, database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun provideUnprotectedTemporaryRepository(database: PrivacyConfigDatabase, @AppCoroutineScope coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider): UnprotectedTemporaryRepository {
-        return RealUnprotectedTemporaryRepository(database, coroutineScope, dispatcherProvider)
+    fun provideHttpsRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): HttpsRepository {
+        return RealHttpsRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 
-    @Singleton
+    @SingleInstanceIn(AppScope::class)
     @Provides
-    fun providePrivacyFeatureTogglesRepository(database: PrivacyConfigDatabase): PrivacyFeatureTogglesRepository {
-        return RealPrivacyFeatureTogglesRepository(database)
+    fun provideUnprotectedTemporaryRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): UnprotectedTemporaryRepository {
+        return RealUnprotectedTemporaryRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
+    }
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun providePrivacyFeatureTogglesRepository(privacyFeatureTogglesDataStore: PrivacyFeatureTogglesDataStore): PrivacyFeatureTogglesRepository {
+        return RealPrivacyFeatureTogglesRepository(privacyFeatureTogglesDataStore)
+    }
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun provideDrmRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): DrmRepository {
+        return RealDrmRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
+    }
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun provideAmpLinksRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): AmpLinksRepository {
+        return RealAmpLinksRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
+    }
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun provideTrackingParametersRepository(
+        database: PrivacyConfigDatabase,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
+    ): TrackingParametersRepository {
+        return RealTrackingParametersRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 }

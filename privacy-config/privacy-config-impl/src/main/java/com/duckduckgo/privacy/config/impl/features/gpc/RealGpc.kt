@@ -16,28 +16,27 @@
 
 package com.duckduckgo.privacy.config.impl.features.gpc
 
-import android.content.Context
-import com.duckduckgo.app.global.UriString.Companion.sameOrSubdomain
-import com.duckduckgo.di.scopes.AppObjectGraph
+import androidx.annotation.VisibleForTesting
+import com.duckduckgo.app.browser.UriString.Companion.sameOrSubdomain
+import com.duckduckgo.app.privacy.db.UserAllowListRepository
+import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.feature.toggles.api.FeatureToggle
 import com.duckduckgo.privacy.config.api.Gpc
 import com.duckduckgo.privacy.config.api.PrivacyFeatureName
-import com.duckduckgo.privacy.config.impl.R
-import com.duckduckgo.privacy.config.impl.features.unprotectedtemporary.UnprotectedTemporary
+import com.duckduckgo.privacy.config.api.UnprotectedTemporary
 import com.duckduckgo.privacy.config.store.features.gpc.GpcRepository
 import com.squareup.anvil.annotations.ContributesBinding
+import dagger.SingleInstanceIn
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@ContributesBinding(AppObjectGraph::class)
-@Singleton
-class RealGpc @Inject constructor(context: Context, private val featureToggle: FeatureToggle, val gpcRepository: GpcRepository, private val unprotectedTemporary: UnprotectedTemporary) : Gpc {
-
-    private val gpcJsFunctions: String = context.resources.openRawResource(R.raw.gpc).bufferedReader().use { it.readText() }
-
-    override fun getGpcJs(): String {
-        return gpcJsFunctions
-    }
+@ContributesBinding(AppScope::class)
+@SingleInstanceIn(AppScope::class)
+class RealGpc @Inject constructor(
+    private val featureToggle: FeatureToggle,
+    private val gpcRepository: GpcRepository,
+    private val unprotectedTemporary: UnprotectedTemporary,
+    private val userAllowListRepository: UserAllowListRepository,
+) : Gpc {
 
     override fun isEnabled(): Boolean {
         return gpcRepository.isGpcEnabled()
@@ -51,9 +50,12 @@ class RealGpc @Inject constructor(context: Context, private val featureToggle: F
         }
     }
 
-    override fun canUrlAddHeaders(url: String, existingHeaders: Map<String, String>): Boolean {
+    override fun canUrlAddHeaders(
+        url: String,
+        existingHeaders: Map<String, String>,
+    ): Boolean {
         return if (canGpcBeUsedByUrl(url) && !containsGpcHeader(existingHeaders)) {
-            headerConsumers.any { sameOrSubdomain(url, it) }
+            gpcRepository.headerEnabledSites.any { sameOrSubdomain(url, it.domain) }
         } else {
             false
         }
@@ -67,20 +69,22 @@ class RealGpc @Inject constructor(context: Context, private val featureToggle: F
         gpcRepository.disableGpc()
     }
 
-    override fun canGpcBeUsedByUrl(url: String): Boolean {
+    @VisibleForTesting
+    fun canGpcBeUsedByUrl(url: String): Boolean {
         return isFeatureEnabled() && isEnabled() && !isAnException(url)
     }
 
     private fun isFeatureEnabled(): Boolean {
-        return featureToggle.isFeatureEnabled(PrivacyFeatureName.GpcFeatureName()) == true
+        return featureToggle.isFeatureEnabled(PrivacyFeatureName.GpcFeatureName.value)
     }
 
     private fun containsGpcHeader(headers: Map<String, String>): Boolean {
         return headers.containsKey(GPC_HEADER)
     }
 
-    private fun isAnException(url: String): Boolean {
-        return matches(url) || unprotectedTemporary.isAnException(url)
+    @VisibleForTesting
+    fun isAnException(url: String): Boolean {
+        return matches(url) || unprotectedTemporary.isAnException(url) || userAllowListRepository.isUrlInUserAllowList(url)
     }
 
     private fun matches(url: String): Boolean {
@@ -90,12 +94,5 @@ class RealGpc @Inject constructor(context: Context, private val featureToggle: F
     companion object {
         const val GPC_HEADER = "sec-gpc"
         const val GPC_HEADER_VALUE = "1"
-
-        private val headerConsumers = listOf(
-            "nytimes.com",
-            "globalprivacycontrol.org",
-            "global-privacy-control.glitch.me"
-        )
     }
-
 }

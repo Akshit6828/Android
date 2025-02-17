@@ -16,17 +16,18 @@
 
 package com.duckduckgo.privacy.config.impl.features.trackerallowlist
 
-import com.duckduckgo.privacy.config.impl.FileUtilities
+import com.duckduckgo.common.test.FileUtilities
+import com.duckduckgo.privacy.config.api.PrivacyFeatureName
 import com.duckduckgo.privacy.config.store.PrivacyFeatureToggles
 import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesRepository
 import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
-import com.nhaarman.mockitokotlin2.argumentCaptor
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.verify
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 
 class TrackerAllowlistPluginTest {
     lateinit var testee: TrackerAllowlistPlugin
@@ -41,37 +42,48 @@ class TrackerAllowlistPluginTest {
 
     @Test
     fun whenFeatureNameDoesNotMatchTrackerAllowlistThenReturnFalse() {
-        assertFalse(testee.store("test", EMPTY_JSON_STRING))
+        PrivacyFeatureName.values().filter { it != FEATURE_NAME }.forEach {
+            assertFalse(testee.store(it.value, EMPTY_JSON_STRING))
+        }
     }
 
     @Test
     fun whenFeatureNameMatchesTrackerAllowlistThenReturnTrue() {
-        assertTrue(testee.store(FEATURE_NAME, EMPTY_JSON_STRING))
+        assertTrue(testee.store(FEATURE_NAME_VALUE, EMPTY_JSON_STRING))
     }
 
     @Test
     fun whenFeatureNameMatchesTrackerAllowlistAndIsEnabledThenStoreFeatureEnabled() {
-        val jsonString = FileUtilities.loadText("json/tracker_allowlist.json")
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/tracker_allowlist.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
-        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME, true))
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, true, null))
     }
 
     @Test
     fun whenFeatureNameMatchesTrackerAllowlistAndIsNotEnabledThenStoreFeatureDisabled() {
-        val jsonString = FileUtilities.loadText("json/tracker_allowlist_disabled.json")
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/tracker_allowlist_disabled.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
-        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME, false))
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, false, null))
+    }
+
+    @Test
+    fun whenFeatureNameMatchesTrackerAllowlistAndHasMinSupportedVersionThenStoreMinSupportedVersion() {
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/tracker_allowlist_min_supported_version.json")
+
+        testee.store(FEATURE_NAME_VALUE, jsonString)
+
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, true, 1234))
     }
 
     @Test
     fun whenFeatureNameMatchesTrackerAllowlistThenUpdateAllExistingExceptions() {
-        val jsonString = FileUtilities.loadText("json/tracker_allowlist.json")
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/tracker_allowlist.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
         argumentCaptor<List<TrackerAllowlistEntity>>().apply {
             verify(mockAllowlistRepository).updateAll(capture())
@@ -86,7 +98,8 @@ class TrackerAllowlistPluginTest {
     }
 
     companion object {
-        private const val FEATURE_NAME = "trackerAllowlist"
+        private val FEATURE_NAME = PrivacyFeatureName.TrackerAllowlistFeatureName
+        private val FEATURE_NAME_VALUE = FEATURE_NAME.value
         private const val EMPTY_JSON_STRING = "{}"
     }
 }

@@ -16,26 +16,32 @@
 
 package com.duckduckgo.privacy.config.impl.features.trackerallowlist
 
-import com.duckduckgo.di.scopes.AppObjectGraph
+import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.privacy.config.api.PrivacyFeatureName
-import com.duckduckgo.privacy.config.impl.plugins.PrivacyFeaturePlugin
-import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
+import com.duckduckgo.privacy.config.api.PrivacyFeaturePlugin
+import com.duckduckgo.privacy.config.impl.features.privacyFeatureValueOf
 import com.duckduckgo.privacy.config.store.PrivacyFeatureToggles
 import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesRepository
+import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
+import javax.inject.Inject
 
-@ContributesMultibinding(AppObjectGraph::class)
+@ContributesMultibinding(AppScope::class)
 class TrackerAllowlistPlugin @Inject constructor(
     private val trackerAllowlistRepository: TrackerAllowlistRepository,
-    private val privacyFeatureTogglesRepository: PrivacyFeatureTogglesRepository
+    private val privacyFeatureTogglesRepository: PrivacyFeatureTogglesRepository,
 ) : PrivacyFeaturePlugin {
 
-    override fun store(name: String, jsonString: String): Boolean {
-        if (name == featureName.value) {
+    override fun store(
+        featureName: String,
+        jsonString: String,
+    ): Boolean {
+        @Suppress("NAME_SHADOWING")
+        val privacyFeature = privacyFeatureValueOf(featureName) ?: return false
+        if (privacyFeature.value == this.featureName) {
             val moshi = Moshi.Builder().build()
             val jsonAdapter: JsonAdapter<TrackerAllowlistFeature> =
                 moshi.adapter(TrackerAllowlistFeature::class.java)
@@ -48,11 +54,11 @@ class TrackerAllowlistPlugin @Inject constructor(
             }
             trackerAllowlistRepository.updateAll(exceptions)
             val isEnabled = trackerAllowlistFeature?.state == "enabled"
-            privacyFeatureTogglesRepository.insert(PrivacyFeatureToggles(name, isEnabled))
+            privacyFeatureTogglesRepository.insert(PrivacyFeatureToggles(this.featureName, isEnabled, trackerAllowlistFeature?.minSupportedVersion))
             return true
         }
         return false
     }
 
-    override val featureName: PrivacyFeatureName = PrivacyFeatureName.TrackerAllowlistFeatureName()
+    override val featureName: String = PrivacyFeatureName.TrackerAllowlistFeatureName.value
 }

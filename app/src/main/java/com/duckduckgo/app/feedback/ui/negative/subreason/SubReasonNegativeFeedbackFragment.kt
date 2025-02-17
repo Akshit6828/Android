@@ -17,29 +17,45 @@
 package com.duckduckgo.app.feedback.ui.negative.subreason
 
 import android.os.Bundle
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ContentFeedbackNegativeDisambiguationSubReasonBinding
 import com.duckduckgo.app.feedback.ui.common.FeedbackFragment
-import com.duckduckgo.app.feedback.ui.common.FeedbackItemDecoration
 import com.duckduckgo.app.feedback.ui.negative.FeedbackType.*
 import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.*
 import com.duckduckgo.app.feedback.ui.negative.FeedbackTypeDisplay
 import com.duckduckgo.app.feedback.ui.negative.FeedbackTypeDisplay.FeedbackTypeSubReasonDisplay
 import com.duckduckgo.app.feedback.ui.negative.displayText
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.di.scopes.FragmentScope
 import timber.log.Timber
 
+@InjectWith(FragmentScope::class)
 class SubReasonNegativeFeedbackFragment : FeedbackFragment(R.layout.content_feedback_negative_disambiguation_sub_reason) {
 
     private lateinit var recyclerAdapter: SubReasonAdapter
 
     interface DisambiguationNegativeFeedbackListener {
-        fun userSelectedSubReasonMissingBrowserFeatures(mainReason: MainReason, subReason: MissingBrowserFeaturesSubReasons)
-        fun userSelectedSubReasonSearchNotGoodEnough(mainReason: MainReason, subReason: SearchNotGoodEnoughSubReasons)
-        fun userSelectedSubReasonNeedMoreCustomization(mainReason: MainReason, subReason: CustomizationSubReasons)
-        fun userSelectedSubReasonAppIsSlowOrBuggy(mainReason: MainReason, subReason: PerformanceSubReasons)
+        fun userSelectedSubReasonMissingBrowserFeatures(
+            mainReason: MainReason,
+            subReason: MissingBrowserFeaturesSubReasons,
+        )
+
+        fun userSelectedSubReasonSearchNotGoodEnough(
+            mainReason: MainReason,
+            subReason: SearchNotGoodEnoughSubReasons,
+        )
+
+        fun userSelectedSubReasonNeedMoreCustomization(
+            mainReason: MainReason,
+            subReason: CustomizationSubReasons,
+        )
+
+        fun userSelectedSubReasonAppIsSlowOrBuggy(
+            mainReason: MainReason,
+            subReason: PerformanceSubReasons,
+        )
     }
 
     private val binding: ContentFeedbackNegativeDisambiguationSubReasonBinding by viewBinding()
@@ -52,29 +68,30 @@ class SubReasonNegativeFeedbackFragment : FeedbackFragment(R.layout.content_feed
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
-        recyclerAdapter = SubReasonAdapter(object : (FeedbackTypeSubReasonDisplay) -> Unit {
-            override fun invoke(reason: FeedbackTypeSubReasonDisplay) {
-                when (reason.subReason) {
-                    is MissingBrowserFeaturesSubReasons -> {
-                        listener?.userSelectedSubReasonMissingBrowserFeatures(mainReason, reason.subReason)
-                    }
-                    is SearchNotGoodEnoughSubReasons -> {
-                        listener?.userSelectedSubReasonSearchNotGoodEnough(mainReason, reason.subReason)
-                    }
-                    is CustomizationSubReasons -> {
-                        listener?.userSelectedSubReasonNeedMoreCustomization(mainReason, reason.subReason)
-                    }
-                    is PerformanceSubReasons -> {
-                        listener?.userSelectedSubReasonAppIsSlowOrBuggy(mainReason, reason.subReason)
+        recyclerAdapter = SubReasonAdapter(
+            object : (FeedbackTypeSubReasonDisplay) -> Unit {
+                override fun invoke(reason: FeedbackTypeSubReasonDisplay) {
+                    when (reason.subReason) {
+                        is MissingBrowserFeaturesSubReasons -> {
+                            listener?.userSelectedSubReasonMissingBrowserFeatures(mainReason, reason.subReason)
+                        }
+                        is SearchNotGoodEnoughSubReasons -> {
+                            listener?.userSelectedSubReasonSearchNotGoodEnough(mainReason, reason.subReason)
+                        }
+                        is CustomizationSubReasons -> {
+                            listener?.userSelectedSubReasonNeedMoreCustomization(mainReason, reason.subReason)
+                        }
+                        is PerformanceSubReasons -> {
+                            listener?.userSelectedSubReasonAppIsSlowOrBuggy(mainReason, reason.subReason)
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
 
         activity?.let {
             binding.recyclerView.layoutManager = LinearLayoutManager(it)
             binding.recyclerView.adapter = recyclerAdapter
-            binding.recyclerView.addItemDecoration(FeedbackItemDecoration(ContextCompat.getDrawable(it, R.drawable.feedback_list_divider)!!))
 
             arguments?.let { args ->
 

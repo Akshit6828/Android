@@ -18,34 +18,50 @@ package com.duckduckgo.app.dev.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.duckduckgo.app.browser.defaultbrowsing.DefaultBrowserDetector
+import com.duckduckgo.anvil.annotations.ContributesViewModel
 import com.duckduckgo.app.dev.settings.db.DevSettingsDataStore
-import com.duckduckgo.app.email.EmailManager
-import com.duckduckgo.app.fire.FireAnimationLoader
-import com.duckduckgo.app.global.plugins.view_model.ViewModelFactoryPlugin
-import com.duckduckgo.app.statistics.VariantManager
-import com.duckduckgo.app.statistics.pixels.Pixel
-import com.duckduckgo.di.scopes.AppObjectGraph
-import com.squareup.anvil.annotations.ContributesMultibinding
+import com.duckduckgo.app.dev.settings.db.UAOverride
+import com.duckduckgo.app.survey.api.SurveyEndpointDataStore
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.di.scopes.ActivityScope
+import com.duckduckgo.savedsites.api.SavedSitesRepository
+import com.duckduckgo.traces.api.StartupTraces
+import com.duckduckgo.user.agent.api.UserAgentProvider
+import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import javax.inject.Inject
-import javax.inject.Provider
 
+@ContributesViewModel(ActivityScope::class)
 class DevSettingsViewModel @Inject constructor(
     private val devSettingsDataStore: DevSettingsDataStore,
+    private val startupTraces: StartupTraces,
+    private val userAgentProvider: UserAgentProvider,
+    private val savedSitesRepository: SavedSitesRepository,
+    private val dispatcherProvider: DispatcherProvider,
+    private val surveyEndpointDataStore: SurveyEndpointDataStore,
 ) : ViewModel() {
 
     data class ViewState(
-        val nextTdsEnabled: Boolean = false
+        val startupTraceEnabled: Boolean = false,
+        val overrideUA: Boolean = false,
+        val userAgent: String = "",
+        val useSandboxSurvey: Boolean = false,
     )
 
     sealed class Command {
         object SendTdsIntent : Command()
-        data class GoToUrl(val url: String) : Command()
+        object OpenUASelector : Command()
+        object ShowSavedSitesClearedConfirmation : Command()
+        object ChangePrivacyConfigUrl : Command()
+        object CustomTabs : Command()
+        data object Notifications : Command()
+        data object Tabs : Command()
     }
 
     private val viewState = MutableStateFlow(ViewState())
@@ -55,8 +71,11 @@ class DevSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             viewState.emit(
                 currentViewState().copy(
-                    nextTdsEnabled = devSettingsDataStore.nextTdsEnabled
-                )
+                    startupTraceEnabled = startupTraces.isTraceEnabled,
+                    overrideUA = devSettingsDataStore.overrideUA,
+                    userAgent = userAgentProvider.userAgent("", false),
+                    useSandboxSurvey = surveyEndpointDataStore.useSurveyCustomEnvironmentUrl,
+                ),
             )
         }
     }
@@ -69,48 +88,63 @@ class DevSettingsViewModel @Inject constructor(
         return command.receiveAsFlow()
     }
 
-    fun onNextTdsToggled(nextTds: Boolean) {
-        Timber.i("User toggled next tds, is now enabled: $nextTds")
-        devSettingsDataStore.nextTdsEnabled = nextTds
+    fun onStartupTraceToggled(value: Boolean) {
+        Timber.v("User toggled startup trace, is now enabled: $value")
+        startupTraces.isTraceEnabled = value
         viewModelScope.launch {
-            viewState.emit(currentViewState().copy(nextTdsEnabled = nextTds))
-            command.send(Command.SendTdsIntent)
+            viewState.emit(currentViewState().copy(startupTraceEnabled = value))
         }
     }
 
-    fun goToPrivacyTest1() {
-        viewModelScope.launch { command.send(Command.GoToUrl(PRIVACY_TEST_URL_1)) }
+    fun onOverrideUAToggled(enabled: Boolean) {
+        devSettingsDataStore.overrideUA = enabled
+        viewModelScope.launch {
+            viewState.emit(currentViewState().copy(overrideUA = enabled))
+        }
     }
 
-    fun goToPrivacyTest2() {
-        viewModelScope.launch { command.send(Command.GoToUrl(PRIVACY_TEST_URL_2)) }
+    fun onSandboxSurveyToggled(enabled: Boolean) {
+        surveyEndpointDataStore.useSurveyCustomEnvironmentUrl = enabled
+        viewModelScope.launch {
+            viewState.emit(currentViewState().copy(useSandboxSurvey = enabled))
+        }
     }
 
     private fun currentViewState(): ViewState {
         return viewState.value
     }
 
-    companion object {
-        private const val PRIVACY_TEST_URL_1 = "https://privacy-test-pages.glitch.me/tracker-reporting/1major-via-script.html"
-        private const val PRIVACY_TEST_URL_2 = "https://privacy-test-pages.glitch.me/tracker-reporting/1major-via-fetch.html"
+    fun onUserAgentSelectorClicked() {
+        viewModelScope.launch { command.send(Command.OpenUASelector) }
     }
-}
 
-@ContributesMultibinding(AppObjectGraph::class)
-class SettingsViewModelFactory @Inject constructor(
-    private val devSettingsDataStore: Provider<DevSettingsDataStore>,
-    private val defaultWebBrowserCapability: Provider<DefaultBrowserDetector>,
-    private val variantManager: Provider<VariantManager>,
-    private val emailManager: Provider<EmailManager>,
-    private val fireAnimationLoader: Provider<FireAnimationLoader>,
-    private val pixel: Provider<Pixel>
-) : ViewModelFactoryPlugin {
-    override fun <T : ViewModel?> create(modelClass: Class<T>): T? {
-        with(modelClass) {
-            return when {
-                isAssignableFrom(DevSettingsViewModel::class.java) -> (DevSettingsViewModel(devSettingsDataStore.get()) as T)
-                else -> null
-            }
+    fun onRemotePrivacyUrlClicked() {
+        viewModelScope.launch { command.send(Command.ChangePrivacyConfigUrl) }
+    }
+
+    fun customTabsClicked() {
+        viewModelScope.launch { command.send(Command.CustomTabs) }
+    }
+
+    fun onUserAgentSelected(userAgent: UAOverride) {
+        devSettingsDataStore.selectedUA = userAgent
+        viewModelScope.launch {
+            viewState.emit(currentViewState().copy(userAgent = userAgentProvider.userAgent("", false)))
         }
+    }
+
+    fun clearSavedSites() {
+        viewModelScope.launch(dispatcherProvider.io()) {
+            savedSitesRepository.deleteAll()
+            command.send(Command.ShowSavedSitesClearedConfirmation)
+        }
+    }
+
+    fun notificationsClicked() {
+        viewModelScope.launch { command.send(Command.Notifications) }
+    }
+
+    fun tabsClicked() {
+        viewModelScope.launch { command.send(Command.Tabs) }
     }
 }

@@ -18,7 +18,7 @@ package com.duckduckgo.app.feedback.ui.negative.openended
 
 import android.os.Bundle
 import androidx.core.view.doOnNextLayout
-import androidx.lifecycle.Observer
+import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ContentFeedbackOpenEndedFeedbackBinding
 import com.duckduckgo.app.feedback.ui.common.FeedbackFragment
@@ -28,12 +28,19 @@ import com.duckduckgo.app.feedback.ui.negative.FeedbackType.SubReason
 import com.duckduckgo.app.feedback.ui.negative.FeedbackTypeDisplay.Companion.mainReasons
 import com.duckduckgo.app.feedback.ui.negative.FeedbackTypeDisplay.Companion.subReasons
 import com.duckduckgo.app.feedback.ui.negative.openended.ShareOpenEndedNegativeFeedbackViewModel.Command
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.di.scopes.FragmentScope
 
+@InjectWith(FragmentScope::class)
 class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedback_open_ended_feedback) {
 
     interface OpenEndedFeedbackListener {
-        fun userProvidedNegativeOpenEndedFeedback(mainReason: MainReason, subReason: SubReason?, feedback: String)
+        fun userProvidedNegativeOpenEndedFeedback(
+            mainReason: MainReason,
+            subReason: SubReason?,
+            feedback: String,
+        )
+
         fun userProvidedPositiveOpenEndedFeedback(feedback: String)
         fun userCancelled()
     }
@@ -51,22 +58,19 @@ class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedbac
     private var subReason: SubReason? = null
 
     override fun configureViewModelObservers() {
-        viewModel.command.observe(
-            this,
-            Observer { command ->
-                when (command) {
-                    is Command.Exit -> {
-                        listener?.userCancelled()
-                    }
-                    is Command.ExitAndSubmitNegativeFeedback -> {
-                        listener?.userProvidedNegativeOpenEndedFeedback(command.mainReason, command.subReason, command.feedback)
-                    }
-                    is Command.ExitAndSubmitPositiveFeedback -> {
-                        listener?.userProvidedPositiveOpenEndedFeedback(command.feedback)
-                    }
+        viewModel.command.observe(this) { command ->
+            when (command) {
+                is Command.Exit -> {
+                    listener?.userCancelled()
+                }
+                is Command.ExitAndSubmitNegativeFeedback -> {
+                    listener?.userProvidedNegativeOpenEndedFeedback(command.mainReason, command.subReason, command.feedback)
+                }
+                is Command.ExitAndSubmitPositiveFeedback -> {
+                    listener?.userProvidedPositiveOpenEndedFeedback(command.feedback)
                 }
             }
-        )
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -88,7 +92,7 @@ class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedbac
     private fun updateDisplayForPositiveFeedback() {
         binding.title.text = getString(R.string.feedbackShareDetails)
         binding.subtitle.text = getString(R.string.sharePositiveFeedbackWithTheTeam)
-        binding.openEndedFeedbackContainer.hint = getString(R.string.whatHaveYouBeenEnjoying)
+        binding.openEndedFeedback.hint = getString(R.string.whatHaveYouBeenEnjoying)
         binding.emoticonImage.setImageResource(R.drawable.ic_happy_face)
     }
 
@@ -98,7 +102,7 @@ class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedbac
 
         binding.title.text = getDisplayText(mainReason!!)
         binding.subtitle.text = getDisplayText(subReason)
-        binding.openEndedFeedbackContainer.hint = getInputHintText(mainReason!!)
+        binding.openEndedFeedback.hint = getInputHintText(mainReason!!)
         binding.emoticonImage.setImageResource(R.drawable.ic_sad_face)
     }
 
@@ -123,7 +127,7 @@ class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedbac
     override fun configureListeners() {
         with(binding) {
             rootScrollView.doOnNextLayout {
-                binding.openEndedFeedback.setOnTouchListener(LayoutScrollingTouchListener(rootScrollView, openEndedFeedbackContainer.y.toInt()))
+                binding.openEndedFeedback.setOnTouchListener(LayoutScrollingTouchListener(rootScrollView, openEndedFeedback.y.toInt()))
             }
 
             submitFeedbackButton.setOnClickListener {
@@ -143,7 +147,10 @@ class ShareOpenEndedFeedbackFragment : FeedbackFragment(R.layout.content_feedbac
         private const val SUB_REASON_EXTRA = "SUB_REASON_EXTRA"
         private const val IS_POSITIVE_FEEDBACK_EXTRA = "IS_POSITIVE_FEEDBACK_EXTRA"
 
-        fun instanceNegativeFeedback(mainReason: MainReason, subReason: SubReason?): ShareOpenEndedFeedbackFragment {
+        fun instanceNegativeFeedback(
+            mainReason: MainReason,
+            subReason: SubReason?,
+        ): ShareOpenEndedFeedbackFragment {
             val fragment = ShareOpenEndedFeedbackFragment()
             fragment.arguments = Bundle().also {
                 it.putBoolean(IS_POSITIVE_FEEDBACK_EXTRA, false)

@@ -16,16 +16,18 @@
 
 package com.duckduckgo.privacy.config.impl.features.gpc
 
-import com.duckduckgo.privacy.config.impl.FileUtilities
+import com.duckduckgo.common.test.FileUtilities
+import com.duckduckgo.privacy.config.api.PrivacyFeatureName
 import com.duckduckgo.privacy.config.store.PrivacyFeatureToggles
 import com.duckduckgo.privacy.config.store.PrivacyFeatureTogglesRepository
 import com.duckduckgo.privacy.config.store.features.gpc.GpcRepository
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.verify
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
-import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.anyList
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 
 class GpcPluginTest {
     lateinit var testee: GpcPlugin
@@ -40,43 +42,55 @@ class GpcPluginTest {
 
     @Test
     fun whenFeatureNameDoesNotMatchGpcThenReturnFalse() {
-        assertFalse(testee.store("test", EMPTY_JSON_STRING))
+        PrivacyFeatureName.values().filter { it != FEATURE_NAME }.forEach {
+            assertFalse(testee.store(it.value, EMPTY_JSON_STRING))
+        }
     }
 
     @Test
     fun whenFeatureNameMatchesGpcThenReturnTrue() {
-        assertTrue(testee.store(FEATURE_NAME, EMPTY_JSON_STRING))
+        assertTrue(testee.store(FEATURE_NAME_VALUE, EMPTY_JSON_STRING))
     }
 
     @Test
     fun whenFeatureNameMatchesGpcAndIsEnabledThenStoreFeatureEnabled() {
-        val jsonString = FileUtilities.loadText("json/gpc.json")
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/gpc.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
-        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME, true))
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, true, null))
     }
 
     @Test
     fun whenFeatureNameMatchesGpcAndIsNotEnabledThenStoreFeatureDisabled() {
-        val jsonString = FileUtilities.loadText("json/gpc_disabled.json")
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/gpc_disabled.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
-        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME, false))
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, false, null))
     }
 
     @Test
-    fun whenFeatureNameMatchesGpcThenUpdateAllExistingExceptions() {
-        val jsonString = FileUtilities.loadText("json/gpc.json")
+    fun whenFeatureNameMatchesGpcAndHasMinSupportedVersionThenStoreMinSupportedVersion() {
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/gpc_min_supported_version.json")
 
-        testee.store(FEATURE_NAME, jsonString)
+        testee.store(FEATURE_NAME_VALUE, jsonString)
 
-        verify(mockGpcRepository).updateAll(ArgumentMatchers.anyList())
+        verify(mockFeatureTogglesRepository).insert(PrivacyFeatureToggles(FEATURE_NAME_VALUE, true, 1234))
+    }
+
+    @Test
+    fun whenFeatureNameMatchesGpcThenUpdateAllExistingExceptionsAndHeadersAndConfig() {
+        val jsonString = FileUtilities.loadText(javaClass.classLoader!!, "json/gpc.json")
+
+        testee.store(FEATURE_NAME_VALUE, jsonString)
+
+        verify(mockGpcRepository).updateAll(anyList(), anyList(), any())
     }
 
     companion object {
-        private const val FEATURE_NAME = "gpc"
+        private val FEATURE_NAME = PrivacyFeatureName.GpcFeatureName
+        private val FEATURE_NAME_VALUE = FEATURE_NAME.value
         private const val EMPTY_JSON_STRING = "{}"
     }
 }

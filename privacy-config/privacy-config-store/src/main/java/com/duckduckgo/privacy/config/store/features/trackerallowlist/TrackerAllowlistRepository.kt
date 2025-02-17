@@ -16,26 +16,33 @@
 
 package com.duckduckgo.privacy.config.store.features.trackerallowlist
 
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.privacy.config.store.PrivacyConfigDatabase
+import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 interface TrackerAllowlistRepository {
     fun updateAll(exceptions: List<TrackerAllowlistEntity>)
-    val exceptions: ArrayList<TrackerAllowlistEntity>
+    val exceptions: CopyOnWriteArrayList<TrackerAllowlistEntity>
 }
 
-class RealTrackerAllowlistRepository(database: PrivacyConfigDatabase, coroutineScope: CoroutineScope, dispatcherProvider: DispatcherProvider) :
-    TrackerAllowlistRepository {
+class RealTrackerAllowlistRepository(
+    database: PrivacyConfigDatabase,
+    coroutineScope: CoroutineScope,
+    dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
+) : TrackerAllowlistRepository {
 
     private val trackerAllowlistDao: TrackerAllowlistDao = database.trackerAllowlistDao()
-    override val exceptions = ArrayList<TrackerAllowlistEntity>()
+    override val exceptions = CopyOnWriteArrayList<TrackerAllowlistEntity>()
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 
@@ -46,8 +53,6 @@ class RealTrackerAllowlistRepository(database: PrivacyConfigDatabase, coroutineS
 
     private fun loadToMemory() {
         exceptions.clear()
-        trackerAllowlistDao.getAll().map {
-            exceptions.add(it)
-        }
+        trackerAllowlistDao.getAll().map { exceptions.add(it) }
     }
 }

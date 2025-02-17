@@ -16,62 +16,81 @@
 
 package com.duckduckgo.app.browser.applinks
 
-import android.os.Build
-import com.duckduckgo.app.global.UriString
+import com.duckduckgo.app.browser.UriString
+import com.duckduckgo.common.utils.extractDomain
+import com.duckduckgo.di.scopes.AppScope
+import com.squareup.anvil.annotations.ContributesBinding
 import javax.inject.Inject
 
 interface AppLinksHandler {
-    fun handleAppLink(isRedirect: Boolean, isForMainFrame: Boolean, urlString: String, launchAppLink: () -> Unit): Boolean
-    fun handleNonHttpAppLink(isRedirect: Boolean, launchNonHttpAppLink: () -> Unit): Boolean
-    fun enterBrowserState(urlString: String?)
-    fun userEnteredBrowserState(url: String?)
+    fun handleAppLink(
+        isForMainFrame: Boolean,
+        urlString: String,
+        appLinksEnabled: Boolean,
+        shouldHaltWebNavigation: Boolean,
+        launchAppLink: () -> Unit,
+    ): Boolean
+
     fun updatePreviousUrl(urlString: String?)
-    fun reset()
+    fun setUserQueryState(state: Boolean)
+    fun isUserQuery(): Boolean
 }
 
+@ContributesBinding(AppScope::class)
 class DuckDuckGoAppLinksHandler @Inject constructor() : AppLinksHandler {
 
     var previousUrl: String? = null
-    var appLinkOpenedInBrowser = false
-    var userEnteredLink = false
+    var isAUserQuery = false
+    var hasTriggeredForDomain = false
+    private val alwaysTriggerList = listOf("app.digid.nl")
 
-    override fun handleAppLink(isRedirect: Boolean, isForMainFrame: Boolean, urlString: String, launchAppLink: () -> Unit): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N ||
-            isRedirect && appLinkOpenedInBrowser ||
-            !isForMainFrame ||
-            UriString.sameOrSubdomain(previousUrl ?: "", urlString)
-        ) {
+    override fun handleAppLink(
+        isForMainFrame: Boolean,
+        urlString: String,
+        appLinksEnabled: Boolean,
+        shouldHaltWebNavigation: Boolean,
+        launchAppLink: () -> Unit,
+    ): Boolean {
+        if (!appLinksEnabled || !isForMainFrame) {
             return false
         }
-        launchAppLink()
-        return true
-    }
 
-    override fun handleNonHttpAppLink(isRedirect: Boolean, launchNonHttpAppLink: () -> Unit): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isRedirect && appLinkOpenedInBrowser && !userEnteredLink) {
-            return true
+        previousUrl?.let {
+            if (isSameOrSubdomain(it, urlString)) {
+                val shouldTrigger = alwaysTriggerList.contains(urlString.extractDomain())
+                if (isAUserQuery || !hasTriggeredForDomain || shouldTrigger) {
+                    previousUrl = urlString
+                    launchAppLink()
+                    hasTriggeredForDomain = true
+                    if (shouldTrigger) return true
+                }
+                return false
+            }
         }
-        launchNonHttpAppLink()
-        return true
-    }
 
-    override fun enterBrowserState(urlString: String?) {
-        appLinkOpenedInBrowser = true
         previousUrl = urlString
+        launchAppLink()
+        hasTriggeredForDomain = true
+        return shouldHaltWebNavigation
     }
 
-    override fun userEnteredBrowserState(url: String?) {
-        userEnteredLink = true
-        enterBrowserState(url)
-    }
+    private fun isSameOrSubdomain(
+        previousUrlString: String,
+        currentUrlString: String,
+    ) = UriString.sameOrSubdomain(previousUrlString, currentUrlString) || UriString.sameOrSubdomain(currentUrlString, previousUrlString)
 
     override fun updatePreviousUrl(urlString: String?) {
+        if (urlString == null || previousUrl?.let { isSameOrSubdomain(it, urlString) } == false) {
+            hasTriggeredForDomain = false
+        }
         previousUrl = urlString
-        reset()
     }
 
-    override fun reset() {
-        appLinkOpenedInBrowser = false
-        userEnteredLink = false
+    override fun setUserQueryState(state: Boolean) {
+        isAUserQuery = state
+    }
+
+    override fun isUserQuery(): Boolean {
+        return isAUserQuery
     }
 }
